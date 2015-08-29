@@ -1,21 +1,34 @@
-// goban := newGoban(9)
-// goban.Place(x, y, color int)
-// goban.NewGroup(x,y int)
+// game := goban.newGoban(9)
+// game.Place(x, y, color int)
+// game.NewGroup(x,y int)
 // group.HasLIberty()
 // group.Remove()
 
-package logic
+package goban
 
 import (
 	"fmt"
-	. "gobang/consts"
 )
 
+/* consts */
+type Color int
+
+const (
+	BLACK Color = 0
+	WHITE Color = 1
+)
+
+const (
+	OK = iota
+	NOTOK
+)
+
+//////////////
 /*  stone  */
 type stone struct {
 	x, y  int
-	color int
-	goban goban
+	color Color
+	goban Goban
 }
 
 func (s stone) hasLiberty() bool {
@@ -34,18 +47,28 @@ func (s stone) hasLiberty() bool {
 	return false
 }
 
-/*  goban  */
-type goban [][]*stone
+func (s *stone) swap() {
+	switch s.color {
+	case BLACK:
+		s.color = WHITE
+	case WHITE:
+		s.color = BLACK
+	}
+}
 
-func newGoban(size int) goban {
-	g := make(goban, size)
+//////////////
+/*  Goban  */
+type Goban [][]*stone
+
+func newGoban(size int) Goban {
+	g := make(Goban, size)
 	for i := range g {
 		g[i] = make([]*stone, size)
 	}
 	return g
 }
 
-func (g goban) Place(x, y int, color int) (ok int) {
+func (g Goban) PlaceStone(x, y int, color Color) (ok int) {
 	if g[x][y] != nil {
 		return NOTOK
 	}
@@ -56,7 +79,7 @@ func (g goban) Place(x, y int, color int) (ok int) {
 	return OK
 }
 
-func (g goban) forEach(f func(*stone)) {
+func (g Goban) forEach(f func(*stone)) {
 	for i := range g {
 		for j := range g[i] {
 			if g[i][j] != nil {
@@ -66,7 +89,7 @@ func (g goban) forEach(f func(*stone)) {
 	}
 }
 
-func (g goban) String() string {
+func (g Goban) String() string {
 	str := ""
 	for i := range g {
 		for j := range g[i] {
@@ -84,10 +107,11 @@ func (g goban) String() string {
 	return str
 }
 
+//////////////
 /*  group  */
 type group []*stone
 
-func (gb goban) NewGroup(x, y int) group {
+func (gb Goban) NewGroup(x, y int) group {
 	grp := make(group, 0)
 	open := make(group, 0)
 	open.push(gb[x][y])
@@ -167,11 +191,28 @@ func (g group) String() string {
 	return str
 }
 
-func swap(s *stone) {
-	switch s.color {
-	case BLACK:
-		s.color = WHITE
-	case WHITE:
-		s.color = BLACK
-	}
+///////////
+/* Game */
+type Game struct {
+	color        Color // actual color
+	goban        Goban
+	sizeX, sizeY int
+}
+
+func New(size int) Game {
+	var game Game
+	game.sizeX = size
+	game.sizeY = size
+	game.color = BLACK
+	game.goban = newGoban(size)
+	return game
+}
+
+func (g *Game) Size() (int, int) {
+	return g.sizeX, g.sizeY
+}
+
+func (g Game) Place(x, y int) error {
+	g.goban.PlaceStone(x, y, g.color)
+	return nil
 }

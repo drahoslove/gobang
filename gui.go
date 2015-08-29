@@ -1,11 +1,10 @@
-// go game in go lang
-
 package main
 
 import (
 	"fmt"
-
 	"time"
+
+	"strconv"
 
 	"github.com/google/gxui"
 	"github.com/google/gxui/drivers/gl"
@@ -14,41 +13,30 @@ import (
 	"github.com/google/gxui/themes/dark"
 
 	// . "gobang/consts"
-	"gobang/logic"
-)
-
-// GLOBALS
-const (
-	VERSION     = "0.1"
-	APPNAME     = "Gobang!"
-	DESCRIPTION = "Goban in Golang"
-	AUTHOR      = "Drahoslav Bednář"
-	WEBPAGE     = "go.yo2.cz"
+	"github.com/Drahoslav7/gobang/logic"
 )
 
 // font ids
+type fontId int
+
 const (
-	H1 = -(1 + iota)
+	H1 fontId = -iota
 	H2
 	H3
 	NORMAL
 	CODE
 )
 
-var (
-	app logic.Application // controler
-)
-
 /* Theme type */
 
 type Theme struct {
 	gxui.Theme
-	fonts   map[int]gxui.Font
+	fonts   map[fontId]gxui.Font
 	bgColor gxui.Color
 }
 
 func createTheme(theme gxui.Theme) Theme {
-	t := Theme{Theme: theme, fonts: make(map[int]gxui.Font)}
+	t := Theme{Theme: theme, fonts: make(map[fontId]gxui.Font)}
 
 	t.addFont(H1, gxfont.Default, 36)
 	t.addFont(H2, gxfont.Default, 24)
@@ -59,7 +47,7 @@ func createTheme(theme gxui.Theme) Theme {
 	return t
 }
 
-func (t *Theme) addFont(id int, bytes []byte, size int) {
+func (t *Theme) addFont(id fontId, bytes []byte, size int) {
 	font, err := t.Driver().CreateFont(bytes, size)
 	if err != nil {
 		panic(err)
@@ -84,11 +72,9 @@ func createIntro(theme Theme) gxui.LinearLayout {
 	screen := createScreen(theme)
 
 	// set texts
-	var label gxui.Label
-
 	texts := []struct {
-		fontId int
-		text   string
+		fontId
+		text string
 	}{
 		{H1, APPNAME},
 		{H3, DESCRIPTION},
@@ -106,7 +92,7 @@ func createIntro(theme Theme) gxui.LinearLayout {
 	}
 
 	for _, s := range texts {
-		label = theme.CreateLabel()
+		label := theme.CreateLabel()
 		label.SetMultiline(true)
 		font := theme.fonts[s.fontId]
 		label.SetFont(font)
@@ -135,7 +121,7 @@ func createEntrance(theme Theme) gxui.LinearLayout {
 
 	label := theme.CreateLabel()
 	label.SetFont(theme.fonts[H3])
-	label.SetText("I am ")
+	label.SetText("I am")
 
 	input := theme.CreateTextBox()
 	input.SetFont(theme.fonts[H2])
@@ -144,12 +130,48 @@ func createEntrance(theme Theme) gxui.LinearLayout {
 		gxui.SetFocus(input)
 	})
 
+	/* buttons */
 	buttext := theme.CreateLabel()
 	buttext.SetFont(theme.fonts[H3])
 	buttext.SetText("Let me in!")
 
+	buttonLogIn := theme.CreateButton()
+	buttonLogIn.AddChild(buttext)
+
+	buttonPlaySingle := theme.CreateButton()
+	// buttonPlaySingle.SetFont(theme.fonts[H3])
+	buttonPlaySingle.SetText("Practice")
+	buttonPlaySingle.OnClick(func(_ gxui.MouseEvent) {
+		fmt.Println("single clicked")
+		app.Practice(nil)
+	})
+
+	screen.AddChild(label)
+	screen.AddChild(input)
+	screen.AddChild(buttonLogIn)
+	screen.AddChild(buttonPlaySingle)
+
+	return screen
+}
+
+func createSettings(theme Theme) gxui.LinearLayout {
+	screen := createScreen(theme)
+
+	label := theme.CreateLabel()
+	label.SetText("size")
+
+	input := theme.CreateTextBox()
+	input.SetText("9")
+	// input.OnAttach(func() {
+	// 	gxui.SetFocus(input)
+	// })
+
 	button := theme.CreateButton()
-	button.AddChild(buttext)
+	button.SetText("Play!")
+	button.OnClick(func(_ gxui.MouseEvent) {
+		size, _ := strconv.Atoi(input.Text())
+		app.Play(size, nil)
+	})
 
 	screen.AddChild(label)
 	screen.AddChild(input)
@@ -158,57 +180,82 @@ func createEntrance(theme Theme) gxui.LinearLayout {
 	return screen
 }
 
+func createPlayground(theme Theme) gxui.LinearLayout {
+	screen := createScreen(theme)
+
+	label := theme.CreateLabel()
+	label.SetText("game") // TODO implement whole screen
+
+	screen.AddChild(label)
+
+	return screen
+}
+
 // app start point
 func appMain(driver gxui.Driver) {
+
 	theme := createTheme(dark.CreateTheme(driver))
 	theme.bgColor = gxui.Color{0.25, 0.25, 0.5, 1}
 
 	window := theme.CreateWindow(400, 350, APPNAME)
 	window.SetBackgroundBrush(gxui.CreateBrush(theme.bgColor))
 
-	window.OnClose(driver.Terminate)
+	window.OnClose(func() {
+		driver.Terminate()
+		app.Exit()
+	})
+
+	// fullscreen
 	window.OnKeyDown(func(e gxui.KeyboardEvent) {
 		if e.Key == gxui.KeyF11 {
 			window.SetFullscreen(!window.Fullscreen())
 		}
 	})
 
-	// screens //
+	////////////////
+	//  screens
+	show := func(screen gxui.LinearLayout) {
+		window.RemoveChild(screen)
+		window.AddChild(screen)
+		screen.SetVisible(true)
+	}
+	hide := func(screen gxui.LinearLayout) {
+		screen.SetVisible(false)
+	}
 
-	// login screen
+	///// playground screen
+	playground := createPlayground(theme)
+	window.AddChild(playground)
+	app.OnState(logic.GAME_SINGLE, func() {
+		show(playground)
+	})
+
+	///// settings screen
+	settings := createSettings(theme)
+	window.AddChild(settings)
+	app.OnState(logic.PRACTICE_SETTINGS, func() {
+		show(settings)
+	})
+	app.OnState(logic.DUEL_SETTINGS, func() {
+		show(settings)
+	})
+
+	///// login screen
 	entrance := createEntrance(theme)
 	window.AddChild(entrance)
-
-	// intro view
-	intro := createIntro(theme)
-	intro.SetVisible(true)
-	window.AddChild(intro)
-
-	// intro actions rules
 	func() {
-
-		enter := func() {
-			app.Entrance(func(_ interface{}) {
-				intro.SetVisible(false)
-				entrance.SetVisible(true)
-				// show if F1 press
-				window.OnKeyDown(func(e gxui.KeyboardEvent) {
-					if e.Key == gxui.KeyF1 {
-						intro.SetVisible(true)
-					}
-				})
-				// hide on F1 release
-				window.OnKeyUp(func(e gxui.KeyboardEvent) {
-					if e.Key == gxui.KeyF1 {
-						intro.SetVisible(false)
-					}
-				})
+		app.OnState(logic.ENTRANCE, func() {
+			driver.Call(func() {
+				show(entrance)
 			})
+		})
+		enter := func() {
+			app.Entrance(nil)
 		}
 		// hide after some time
 		time.AfterFunc(2*time.Second, enter)
 		// or hide on click
-		intro.OnClick(func(_ gxui.MouseEvent) {
+		window.OnClick(func(_ gxui.MouseEvent) {
 			enter()
 		})
 		// or hide on esc
@@ -220,12 +267,27 @@ func appMain(driver gxui.Driver) {
 
 	}()
 
+	///// intro screen
+	intro := createIntro(theme)
+	window.AddChild(intro)
+	intro.SetVisible(true)
+	// show if F1 press
+	window.OnKeyDown(func(e gxui.KeyboardEvent) {
+		if e.Key == gxui.KeyF1 {
+			show(intro)
+		}
+	})
+	// hide on F1 release
+	window.OnKeyUp(func(e gxui.KeyboardEvent) {
+		if e.Key == gxui.KeyF1 {
+			hide(intro)
+		}
+	})
+
 }
 
-func main() {
-
-	fmt.Println("start")
+func startGUI() {
+	fmt.Println("GUI start")
+	defer fmt.Println("GUI end")
 	gl.StartDriver(appMain)
-	fmt.Println("end")
-
 }

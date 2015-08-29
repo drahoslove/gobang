@@ -6,9 +6,16 @@ NAME = gobang
 
 build: $(NAME).exe
 
-run: $(NAME).exe
-	$^
+run: rung
 
-$(NAME).exe: $(NAME).go 
-	go build -o $@ $^
+runc: $(NAME).exe
+	./$^ --cli
 
+rung: $(NAME).exe
+	./$^ --gui
+
+$(NAME).exe: *.go logic/*.go
+	go build
+
+%.syso: %.rc
+	windres -o $@ $^ 
